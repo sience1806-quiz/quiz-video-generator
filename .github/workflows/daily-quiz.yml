@@ -1,0 +1,131 @@
+name: Daily Quiz Video Generator
+
+on:
+  schedule:
+    - cron: '0 8 * * *'  # Täglich um 8 Uhr UTC
+  workflow_dispatch:  # Manuelle Ausführung möglich
+
+jobs:
+  generate-quiz:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v3
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+    
+    - name: Install System Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y ffmpeg espeak-ng
+        
+    - name: Install Python Dependencies
+      run: |
+        pip install --upgrade pip
+        pip install pillow gpt4all
+    
+    - name: Create Required Directories
+      run: |
+        mkdir -p models
+        mkdir -p music
+        mkdir -p piper
+        mkdir -p piper_models
+        mkdir -p backgrounds
+    
+    - name: Download GPT4All Model
+      run: |
+        cd models
+        if [ ! -f "ggml-gpt4all-j.bin" ]; then
+          echo "Downloading GPT4All model..."
+          wget -q --show-progress https://gpt4all.io/models/ggml-gpt4all-j-v1.3-groovy.bin -O ggml-gpt4all-j.bin
+        else
+          echo "GPT4All model already exists"
+        fi
+        
+    - name: Download Background Music
+      run: |
+        cd music
+        if [ ! -f "track1.mp3" ]; then
+          echo "Downloading background music..."
+          # Verwende eine Public Domain / Creative Commons Musik
+          wget -q --show-progress "https://www.bensound.com/bensound-music/bensound-ukulele.mp3" -O track1.mp3 || \
+          wget -q --show-progress "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Cipher.mp3" -O track1.mp3
+        else
+          echo "Music file already exists"
+        fi
+    
+    - name: Download Piper TTS (Optional)
+      run: |
+        cd piper
+        if [ ! -f "piper" ]; then
+          echo "Downloading Piper TTS..."
+          # Piper Release für Linux x64
+          wget -q --show-progress https://github.com/rhasspy/piper/releases/download/v1.2.0/piper_amd64.tar.gz
+          tar -xzf piper_amd64.tar.gz
+          chmod +x piper
+          rm piper_amd64.tar.gz
+        else
+          echo "Piper already installed"
+        fi
+        
+    - name: Download Piper German Voice Model
+      run: |
+        cd piper_models
+        if [ ! -d "de_DE-eva_k-x_low" ]; then
+          echo "Downloading German voice model..."
+          wget -q --show-progress https://github.com/rhasspy/piper/releases/download/v1.2.0/de_DE-eva_k-x_low.tar.gz
+          tar -xzf de_DE-eva_k-x_low.tar.gz
+          rm de_DE-eva_k-x_low.tar.gz
+          # Erstelle Symlink für einfacheren Zugriff
+          ln -s de_DE-eva_k-x_low de_de_eva
+        else
+          echo "Voice model already exists"
+        fi
+    
+    - name: Download/Create Background Image
+      run: |
+        cd backgrounds
+        # Option 1: Lade ein Dark Background herunter
+        if [ ! -f "quiz_bg.png" ]; then
+          echo "Creating dark background placeholder..."
+          # Falls kein spezifisches Bild verfügbar, wird es vom Script generiert
+          # Alternativ: wget eines dunklen Hintergrunds
+          python3 -c "from PIL import Image; img = Image.new('RGB', (1080, 1920), (15, 15, 30)); img.save('quiz_bg.png')"
+        fi
+        # Kopiere zu erwarteter Position
+        cp quiz_bg.png /tmp/background_default.png || true
+    
+    - name: Make Script Executable
+      run: chmod +x generate_quiz_video.py
+      
+    - name: Generate Quiz Video
+      run: |
+        python3 generate_quiz_video.py
+        
+    - name: Upload Video Artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: quiz-video
+        path: quiz_*.mp4
+        retention-days: 30
+        
+    - name: Commit and Push Video (Optional)
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        
+        # Erstelle videos Ordner falls nicht vorhanden
+        mkdir -p videos
+        
+        # Verschiebe generiertes Video
+        mv quiz_*.mp4 videos/ || echo "No video to move"
+        
+        # Commit nur wenn Änderungen vorhanden
+        git add videos/
+        git diff --quiet && git diff --staged --quiet || (git commit -m "Add daily quiz video $(date +'%Y-%m-%d')" && git push)
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
