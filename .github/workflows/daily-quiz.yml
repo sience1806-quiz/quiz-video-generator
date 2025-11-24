@@ -77,10 +77,13 @@ jobs:
         cd piper_models
         if [ ! -d "de_DE-eva_k-x_low" ]; then
           echo "Downloading German voice model..."
-          wget -q --show-progress https://github.com/rhasspy/piper/releases/download/v1.2.0/de_DE-eva_k-x_low.tar.gz
-          tar -xzf de_DE-eva_k-x_low.tar.gz
-          rm de_DE-eva_k-x_low.tar.gz
-          # Erstelle Symlink für einfacheren Zugriff
+          # Korrekter Download-Link für deutsches Voice Model
+          wget -q --show-progress https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/de/de_DE/eva_k/x_low/de_DE-eva_k-x_low.onnx
+          wget -q --show-progress https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/de/de_DE/eva_k/x_low/de_DE-eva_k-x_low.onnx.json
+          # Erstelle Verzeichnis und Symlink
+          mkdir -p de_DE-eva_k-x_low
+          mv de_DE-eva_k-x_low.onnx de_DE-eva_k-x_low/
+          mv de_DE-eva_k-x_low.onnx.json de_DE-eva_k-x_low/
           ln -s de_DE-eva_k-x_low de_de_eva
         else
           echo "Voice model already exists"
